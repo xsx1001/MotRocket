@@ -1,0 +1,43 @@
+==> torch version: 1.5.0
+==> cudnn version: 7604
+==> Cmd:
+['c:/Users/许世雄/Desktop/mot_rocket/train/main.py']
+==> Opt:
+  K: 100
+  arch: res_18
+  batch_size: 32
+  data_dir: c:\Users\许世雄\Desktop\mot_rocket\train\data
+  debug_dir: c:\Users\许世雄\Desktop\mot_rocket\train\exp\default\debug
+  down_ratio: 4
+  exp_dir: c:\Users\许世雄\Desktop\mot_rocket\train\exp
+  exp_id: default
+  fix_res: False
+  flip_test: False
+  gpus: [0]
+  gpus_str: 0
+  input_h: -1
+  input_res: -1
+  input_w: -1
+  keep_res: False
+  load_model: 
+  lr: 0.000125
+  lr_step: [200]
+  master_batch_size: -1
+  metric: loss
+  nms: False
+  not_cuda_benchmark: False
+  not_prefetch_test: False
+  num_epochs: 140
+  num_iters: -1
+  num_stacks: 1
+  num_workers: 4
+  print_iter: 0
+  resume: False
+  root_dir: c:\Users\许世雄\Desktop\mot_rocket\train
+  save_all: False
+  save_dir: c:\Users\许世雄\Desktop\mot_rocket\train\exp\default
+  seed: 317
+  test: False
+  test_scales: [1.0]
+  trainval: False
+  val_intervals: 5
