@@ -95,7 +95,7 @@ class opts(object):
         opt.test_scales = [float(i) for i in opt.test_scales.split(',')]
 
 
-        opt.root_dir = os.path.join(os.path.dirname(__file__))
+        opt.root_dir = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
         print(opt.root_dir)
         opt.data_dir = os.path.join(opt.root_dir, 'data')
         opt.exp_dir = os.path.join(opt.root_dir, 'exp')

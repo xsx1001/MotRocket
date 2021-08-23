@@ -42,7 +42,7 @@ def main(opt):
     print('Setting up data...')
     val_loader = torch.utils.data.DataLoader(
         dataset_val, 
-        batch_size=16, 
+        batch_size=1, 
         shuffle=False,
         num_workers=4,
         pin_memory=True
@@ -58,7 +58,7 @@ def main(opt):
 
     train_loader = torch.utils.data.DataLoader(
         dataset_train, 
-        batch_size=16, 
+        batch_size=1, 
         shuffle=True,
         num_workers=4,
         pin_memory=True,

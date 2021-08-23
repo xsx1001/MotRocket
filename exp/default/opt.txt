@@ -6,10 +6,10 @@
   K: 100
   arch: res_18
   batch_size: 32
-  data_dir: c:\Users\许世雄\Desktop\mot_rocket\MotRocket\train\data
-  debug_dir: c:\Users\许世雄\Desktop\mot_rocket\MotRocket\train\exp\default\debug
+  data_dir: c:\Users\许世雄\Desktop\mot_rocket\MotRocket\data
+  debug_dir: c:\Users\许世雄\Desktop\mot_rocket\MotRocket\exp\default\debug
   down_ratio: 4
-  exp_dir: c:\Users\许世雄\Desktop\mot_rocket\MotRocket\train\exp
+  exp_dir: c:\Users\许世雄\Desktop\mot_rocket\MotRocket\exp
   exp_id: default
   fix_res: False
   flip_test: False
@@ -33,9 +33,9 @@
   num_workers: 4
   print_iter: 0
   resume: False
-  root_dir: c:\Users\许世雄\Desktop\mot_rocket\MotRocket\train
+  root_dir: c:\Users\许世雄\Desktop\mot_rocket\MotRocket
   save_all: False
-  save_dir: c:\Users\许世雄\Desktop\mot_rocket\MotRocket\train\exp\default
+  save_dir: c:\Users\许世雄\Desktop\mot_rocket\MotRocket\exp\default
   seed: 317
   test: False
   test_scales: [1.0]
