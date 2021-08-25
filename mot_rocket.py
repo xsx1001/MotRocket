@@ -30,6 +30,8 @@ class Instance(object):
         self._trajectory = [[init_px, init_py]]
         self._observed_frame_id = [frame_id]
         self._observed_trajectory = [[init_px, init_py]]
+        self._vx = []
+        self._vy = []
         self._k = None
         self._b = None
         self._active_flag = True
@@ -46,22 +48,31 @@ class Instance(object):
     def add_observed_trajectory(self, new_px, new_py):
         self._observed_trajectory.append([new_px, new_py])
         self.update_k_b()
+        self.update_vx_vy()
     
     def update_idx(self, new_idx):
         self._idx = new_idx
-    
+
+    def update_vx_vy(self):
+        if len(self._observed_trajectory)>1:
+            pred_id = -2
+            vx = (self._observed_trajectory[-1][0] - self._observed_trajectory[pred_id][0])/(self._observed_frame_id[-1]-self._observed_frame_id[pred_id])
+            vy = (self._observed_trajectory[-1][1] - self._observed_trajectory[pred_id][1])/(self._observed_frame_id[-1]-self._observed_frame_id[pred_id])
+            self._vx.append(vx)
+            self._vy.append(vy)
     def update_k_b(self):
-        past_len = 60
+        past_len = 30
         if len(self._observed_trajectory) > past_len:
             X_array = np.array(self._observed_trajectory)[-past_len:, 0]
             Y_array = np.array(self._observed_trajectory)[-past_len:, 1]
             ppot, pcov = optimize.curve_fit(func, X_array , Y_array)
-            if self._k is None:
-                self._k = ppot[0]
-                self._b = ppot[1]
-            elif abs(ppot[0]-self._k)+abs(ppot[1]-self._b)<1:
-                self._k = ppot[0]
-                self._b = ppot[1]
+            # if self._k is None:
+            self._k = ppot[0]
+            self._b = ppot[1]
+            # elif abs(ppot[0]-self._k)+abs(ppot[1]-self._b)<50:
+            #     # print(23243)
+            #     self._k = ppot[0]
+            #     self._b = ppot[1]
 
             # print(self._k, self._b)
 
@@ -95,7 +106,7 @@ def get_distance(pos1, pos2):
     return np.sqrt((pos1[0]-pos2[0])**2+(pos1[1]-pos2[1])**2)
 
 class MoT(object):
-    def __init__(self, image_folder, output_folder, binary_thresh=10, distance_thresh=5, model_path="./checkpoint/model_best.py", use_model=True, output_video_flag=True) -> None:
+    def __init__(self, image_folder, output_folder, binary_thresh=10, distance_thresh=5, model_path="./checkpoint/model_best.pth", use_model=True, output_video_flag=True) -> None:
         super().__init__()
         self.image_folder = image_folder
         self.output_folder = output_folder
@@ -221,6 +232,8 @@ class MoT(object):
                 cv2.imwrite(os.path.join(self.output_folder, "diff_binary", str(i).zfill(6)+".jpg"), local_extra_image)
                 # cv2.imshow("", diff_image)
                 # cv2.waitKey(0)
+                if np.random.uniform() < 0.7:
+                    local_extra_image[:, :] = 0
 
                 self.match_instances(local_extra_image, i)
                 self.update_pre_instances(i)
@@ -288,7 +301,7 @@ class MoT(object):
             for i in range(1, num_labels):
                 s = stats[i][-1]
                 if s < 30:
-                    curr_cen = [int(centroids[i][1]), int(centroids[i][0])]
+                    curr_cen = [centroids[i][1], centroids[i][0]]
                     detected_centroids.append(curr_cen)
 
         # 初始阶段，全部认为是目标
@@ -331,13 +344,14 @@ class MoT(object):
             for i in range(len(row_ind)):
                 if col_ind[i] < len(detected_centroids) and row_ind[i] < len(self.pre_instances):
                     if dis_matrix[row_ind[i], col_ind[i]] < self.distance_thresh and ins._active_flag:
-                        aligned_idx.append(col_ind[i])
+                        
                         ins = self.pre_instances[row_ind[i]]
                         pos_x = detected_centroids[col_ind[i]][0]
                         pos_y = detected_centroids[col_ind[i]][1]
                         pos_x += np.sum(self.pxs)
                         pos_y += np.sum(self.pys)
                         if self.check_direction(ins, [pos_x, pos_y], curr_frame):
+                            aligned_idx.append(col_ind[i])
                             ins.add_trajectory_frame_id(curr_frame)
                             ins.add_trajectory(pos_x, pos_y)
                             ins.add_observed_frame_id(curr_frame)
@@ -388,7 +402,7 @@ class MoT(object):
             for i in range(len(row_ind)):
                 if col_ind[i] < len(detected_centroids) and row_ind[i] < len(self.instances)+len(self.pre_instances) and ins._active_flag:
                     if dis_matrix[row_ind[i], col_ind[i]] < self.distance_thresh:
-                        aligned_idx.append(col_ind[i])
+                        
                         pos_x = detected_centroids[col_ind[i]][0]
                         pos_y = detected_centroids[col_ind[i]][1]
                         pos_x += np.sum(self.pxs)
@@ -396,6 +410,7 @@ class MoT(object):
                         if row_ind[i] < len(self.instances):
                             ins = self.instances[row_ind[i]]
                             if self.check_direction(ins, [pos_x, pos_y], curr_frame):
+                                aligned_idx.append(col_ind[i])
                                 ins.add_trajectory_frame_id(curr_frame)
                                 ins.add_trajectory(pos_x, pos_y)
                                 ins.add_observed_frame_id(curr_frame)
@@ -404,6 +419,7 @@ class MoT(object):
                         else:
                             ins = self.pre_instances[row_ind[i]-instances_len]
                             if self.check_direction(ins, [pos_x, pos_y], curr_frame):
+                                aligned_idx.append(col_ind[i])
                                 ins.add_trajectory_frame_id(curr_frame)
                                 ins.add_trajectory(pos_x, pos_y)
                                 ins.add_observed_frame_id(curr_frame)
@@ -449,13 +465,14 @@ class MoT(object):
             for i in range(len(row_ind)):
                 if row_ind[i] < len(self.instances) and col_ind[i] < len(detected_centroids):
                     if dis_matrix[row_ind[i], col_ind[i]] < self.distance_thresh:
-                        aligned_idx.append(col_ind[i])
+                        
                         ins = self.instances[row_ind[i]]
                         pos_x = detected_centroids[col_ind[i]][0]
                         pos_y = detected_centroids[col_ind[i]][1]
                         pos_x += np.sum(self.pxs)
                         pos_y += np.sum(self.pys)
                         if self.check_direction(ins, [pos_x, pos_y], curr_frame) and ins._active_flag:
+                            aligned_idx.append(col_ind[i])
                             ins.add_trajectory_frame_id(curr_frame)
                             ins.add_trajectory(pos_x, pos_y)
                             ins.add_observed_frame_id(curr_frame)
@@ -475,50 +492,64 @@ class MoT(object):
             new_instances = []
             for ins in self.instances:
                 if not ins._trajectory_frame_id[-1] == curr_frame and ins._active_flag:
-                    if len(ins._observed_frame_id) > 60:
-                        pred_id = -60
-                    else:
-                        pred_id = -10
-                    vx = (ins._observed_trajectory[-1][0] - ins._observed_trajectory[pred_id][0])/(ins._observed_frame_id[-1]-ins._observed_frame_id[pred_id])
-                    vy = (ins._observed_trajectory[-1][1] - ins._observed_trajectory[pred_id][1])/(ins._observed_frame_id[-1]-ins._observed_frame_id[pred_id])
+                    # if len(ins._observed_frame_id) < 80:
+                    #     pred_id = -len(ins._observed_frame_id)
+                    # else:
+                    #     pred_id = -80
+                    # vx = (ins._observed_trajectory[-1][0] - ins._observed_trajectory[pred_id][0])/(ins._observed_frame_id[-1]-ins._observed_frame_id[pred_id])
+                    # vy = (ins._observed_trajectory[-1][1] - ins._observed_trajectory[pred_id][1])/(ins._observed_frame_id[-1]-ins._observed_frame_id[pred_id])
+                    if len(ins._vx)<10:
+                        vx = np.mean(ins._vx)
+                        vy = np.mean(ins._vy)
+                    if len(ins._vx)>=10:
+                        vx = np.mean(ins._vx[-10:])
+                        vy = np.mean(ins._vy[-10:])
+                    # print(vx, vy)
                     X_curr = [ins._trajectory[-1][0]+vx*(curr_frame-ins._trajectory_frame_id[-1]), ins._trajectory[-1][1]+vy*(curr_frame-ins._trajectory_frame_id[-1])]
-                    if ins._k is not None:
-                        # print(X_curr)
+                    # if ins._k is not None:
+                    #     # print(X_curr)
                 
-                        y1 = ins._k*X_curr[0]+ins._b
-                        x2 = (X_curr[1]-ins._b)/ins._k
-                        X_curr_new = [int((X_curr[0]+x2)/2), int((X_curr[1]+y1)/2)]
-                        # print(X_curr_new)
-                        X_curr = X_curr_new
+                    #     y1 = ins._k*X_curr[0]+ins._b
+                    #     x2 = (X_curr[1]-ins._b)/ins._k
+                    #     X_curr_new = [int((X_curr[0]+x2)/2), int((X_curr[1]+y1)/2)]
+                    #     # print(X_curr_new)
+                    #     X_curr = X_curr_new
                     ins.add_trajectory_frame_id(curr_frame)
-                    ins.add_trajectory(int(X_curr[0]), int(X_curr[1]))
+                    ins.add_trajectory(X_curr[0], X_curr[1])
                 new_instances.append(ins)
             
             self.instances = new_instances
 
     def check_direction(self, ins, pos, curr_frame):
+        # return True
         if len(ins._trajectory) < 2:
             return True
         elif ins._k is None:
-            new_vx = (pos[0] - ins._trajectory[-1][0])/(curr_frame-ins._trajectory_frame_id[-1])
-            new_vy = (pos[1] - ins._trajectory[-1][1])/(curr_frame-ins._trajectory_frame_id[-1])
+            new_vx = (pos[0] - ins._trajectory[0][0])/(curr_frame-ins._trajectory_frame_id[0])
+            new_vy = (pos[1] - ins._trajectory[0][1])/(curr_frame-ins._trajectory_frame_id[0])
             ins_vx = (ins._trajectory[-1][0] - ins._trajectory[0][0])/(ins._trajectory_frame_id[-1]-ins._trajectory_frame_id[0])
             ins_vy = (ins._trajectory[-1][1] - ins._trajectory[0][1])/(ins._trajectory_frame_id[-1]-ins._trajectory_frame_id[0])
-            if get_distance(ins._trajectory[-1], pos)<get_distance(ins._trajectory[-1], ins._trajectory[0])/(ins._trajectory_frame_id[-1]-ins._trajectory_frame_id[0])/2 or self.check_v([ins_vx, ins_vy], [new_vx, new_vy])<0.5:
-                return False
-            else:
+            vv = get_distance(ins._trajectory[-1], ins._trajectory[0])/(ins._trajectory_frame_id[-1]-ins._trajectory_frame_id[0])
+            if self.check_v([ins_vx, ins_vy], [new_vx, new_vy])>0.9:
                 return True
-        else:
-            new_vx = (pos[0] - ins._trajectory[-1][0])/(curr_frame-ins._trajectory_frame_id[-1])
-            new_vy = (pos[1] - ins._trajectory[-1][1])/(curr_frame-ins._trajectory_frame_id[-1])
-            ins_vx = (ins._trajectory[-1][0] - ins._trajectory[0][0])/(ins._trajectory_frame_id[-1]-ins._trajectory_frame_id[0])
-            ins_vy = (ins._trajectory[-1][1] - ins._trajectory[0][1])/(ins._trajectory_frame_id[-1]-ins._trajectory_frame_id[0])
-            if ins._k*pos[0] + ins._b - pos[1] < 2:
-                if get_distance(ins._trajectory[-1], pos)<get_distance(ins._trajectory[-1], ins._trajectory[-30])/(ins._trajectory_frame_id[-1]-ins._trajectory_frame_id[-30])/2 or self.check_v([ins_vx, ins_vy], [new_vx, new_vy])<0.5:
-                    return False
-                else:
-                    return True
             else:
+                # print(12214)
+                return False
+        else:
+            new_vx = (pos[0] - ins._trajectory[-30][0])/(curr_frame-ins._trajectory_frame_id[-30])
+            new_vy = (pos[1] - ins._trajectory[-30][1])/(curr_frame-ins._trajectory_frame_id[-30])
+            ins_vx = (ins._trajectory[-1][0] - ins._trajectory[-30][0])/(ins._trajectory_frame_id[-1]-ins._trajectory_frame_id[-30])
+            ins_vy = (ins._trajectory[-1][1] - ins._trajectory[-30][1])/(ins._trajectory_frame_id[-1]-ins._trajectory_frame_id[-30])
+            # print(self.check_v([ins_vx, ins_vy], [new_vx, new_vy]))
+            if abs(ins._k*pos[0] + ins._b - pos[1]) < 500:
+                vv = get_distance(ins._trajectory[-1], ins._trajectory[-30])/(ins._trajectory_frame_id[-1]-ins._trajectory_frame_id[-30])
+                if self.check_v([ins_vx, ins_vy], [new_vx, new_vy])>0.9:
+                    return True
+                else:
+                    # print(234234)
+                    return False
+            else:
+                # print(234546)
                 return False
 
     def check_v(self, ins_v, new_v):
@@ -550,7 +581,7 @@ class MoT(object):
     def update_instances(self, curr_frame):
         new_instances = []
         for ins in self.instances:
-            if curr_frame-ins._observed_frame_id[-1] > 60 and ins._active_flag:
+            if curr_frame-ins._observed_frame_id[-1] > 100 and ins._active_flag:
                 ins._active_flag = False
             new_instances.append(ins)
 
@@ -591,10 +622,10 @@ class MoT(object):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--images_dir', type=str, default="./data/images/video100/image", help='Images folder')
+    parser.add_argument('--images_dir', type=str, default="./data/images/video99/image", help='Images folder')
     parser.add_argument('--output_dir', type=str, default="./output", help='output folder')
     parser.add_argument('--binary_thresh', type=int, default=100, help='Binary threshold')
-    parser.add_argument('--distance_thresh', type=int, default=3, help='Distance threshold')
+    parser.add_argument('--distance_thresh', type=int, default=5, help='Distance threshold')
     parser.add_argument('--model_path', type=str, default="./checkpoint/model_best.pth", help='model_path')
     parser.add_argument('--use_model', type=bool, default=False, help="use model flag")
     args = parser.parse_args()
