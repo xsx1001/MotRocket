@@ -232,14 +232,20 @@ class MoT(object):
                 cv2.imwrite(os.path.join(self.output_folder, "diff_binary", str(i).zfill(6)+".jpg"), local_extra_image)
                 # cv2.imshow("", diff_image)
                 # cv2.waitKey(0)
-                if np.random.uniform() < 0.7:
-                    local_extra_image[:, :] = 0
+                # if np.random.uniform() < 0.7:
+                #     local_extra_image[:, :] = 0
 
                 self.match_instances(local_extra_image, i)
                 self.update_pre_instances(i)
                 self.update_instances(i)
                 self.generate_output_image(i)
             else:
+                local_extra_image = np.zeros_like(self.get_image(self.image_path_list[i])).astype(np.uint8)
+
+                self.match_instances(local_extra_image, i)
+                self.update_pre_instances(i)
+                self.update_instances(i)
+                self.generate_output_image(i)
                 print("jump!")
 
         if self.output_video_flag:

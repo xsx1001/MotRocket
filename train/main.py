@@ -28,7 +28,7 @@ def main(opt):
     optimizer = torch.optim.Adam(model.parameters(), opt.lr)
     start_epoch = 0
     if opt.load_model != '':
-        model_path = "./exp/default/model_last.pth"
+        model_path = "./exp/default/model_best.pth"
         checkpoint = torch.load(model_path, map_location=lambda storage, loc: storage)
         state_dict = checkpoint['state_dict']
 

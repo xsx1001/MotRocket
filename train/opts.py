@@ -5,8 +5,8 @@ class opts(object):
     def __init__(self):
         self.parser = argparse.ArgumentParser()
 
-        self.parser.add_argument('--load_model', default='',
-                             help='path to pretrained model')
+        self.parser.add_argument('--load_model', type=bool, default=False,
+                             help='load model flag')
         self.parser.add_argument('--exp_id', default='default')
         self.parser.add_argument('--gpus', default='0', 
                              help='-1 for CPU, use comma for multiple gpus')
