@@ -125,6 +125,7 @@ class MoT(object):
         self.image_loader()
         image_0 = np.mean(mpimg.imread(self.image_path_list[0]), axis=2)
         self.background_image_list = []
+        self.base_background_image_list = []
         self.image_size = [image_0.shape[0], image_0.shape[1]]
         self.total_frame = len(self.image_path_list)
         self.align_flag = 0
@@ -175,6 +176,13 @@ class MoT(object):
                 # img_Guassian = cv2.GaussianBlur(self.image_list[i],(3,3),0)
                 diff_image = np.clip(self.get_image(self.image_path_list[i])-background_image, 0, 255)
                 diff_image = signal.medfilt2d(diff_image, (3,3))
+                if max(map(max, diff_image)) < 10:
+                    base_background_image = np.zeros_like(image_pred)
+                    for i in range(len(self.base_background_image_list)):
+                        base_background_image += np.uint8(self.base_background_image_list[i]/(len(self.base_background_image_list)))
+
+                    diff_image = np.clip(self.get_image(self.image_path_list[i])-base_background_image, 0, 255)
+                    diff_image = signal.medfilt2d(diff_image, (3,3))
 
                 if len(self.background_image_list) == 10 and self.use_model:
                     input_image = []
@@ -262,16 +270,23 @@ class MoT(object):
             else:
                 self.background_image_list.pop(0)
                 self.background_image_list.append(image_pred)
+            
+            if len(self.base_background_image_list) < 5:
+                self.base_background_image_list.append(image_pred)
+
         elif (abs(px) > 0.01 or abs(py) > 0.01) and self.align_flag == 0:
             self.before_align_frames.append(i-1)
             self.background_image_list = []
+            self.base_background_image_list = []
             self.align_flag = 1
         elif (abs(px) > 0.01 or abs(py) > 0.01) and self.align_flag == 1:
             self.background_image_list = []
+            self.base_background_image_list = []
             self.align_flag = 1
         elif abs(px) < 0.01 and abs(py) < 0.01 and self.align_flag == 1:
             self.after_align_frames.append(i)
             self.background_image_list.append(image_pred)
+            self.base_background_image_list.append(image_pred)
             self.align_flag = 0
             # print(self.after_align_frames[-1], self.before_align_frames[-1])
             px, py = pic_align(np.uint8(self.get_image(self.image_path_list[self.after_align_frames[-1]])), np.uint8(self.get_image(self.image_path_list[self.before_align_frames[-1]])))
@@ -297,7 +312,6 @@ class MoT(object):
 
             return output
 
-
     def match_instances(self, local_extra_image, curr_frame):
         num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(local_extra_image, connectivity=8, ltype=None)
 
@@ -310,6 +324,7 @@ class MoT(object):
                     curr_cen = [centroids[i][1], centroids[i][0]]
                     detected_centroids.append(curr_cen)
 
+        # TODO 新的没有匹配的观测与没有观测中的旧的轨迹中最后观测计算v的大小和方向进行修正
         # 初始阶段，全部认为是目标
         if len(self.instances) == 0 and len(self.pre_instances) == 0 and len(detected_centroids) > 0:
             for i in range(len(detected_centroids)):
@@ -332,17 +347,24 @@ class MoT(object):
                     pos_y += np.sum(self.pys)
 
                     ins = self.pre_instances[i]
-                    use_pred = True
-                    if len(ins._observed_trajectory)>30:
-                        pred_id = -30
-                    else:
-                        use_pred = False
-                    if use_pred:
-                        vx = (ins._observed_trajectory[-1][0] - ins._observed_trajectory[pred_id][0])/(ins._observed_frame_id[-1]-ins._observed_frame_id[pred_id])
-                        vy = (ins._observed_trajectory[-1][1] - ins._observed_trajectory[pred_id][1])/(ins._observed_frame_id[-1]-ins._observed_frame_id[pred_id])
-                        X_curr = [ins._trajectory[-1][0]+vx, ins._trajectory[-1][1]+vy]
-                    else:
-                        X_curr = ins._trajectory[-1]
+                    if len(ins._vx)<10:
+                        vx = np.mean(ins._vx)
+                        vy = np.mean(ins._vy)
+                    if len(ins._vx)>=10:
+                        vx = np.mean(ins._vx[-10:])
+                        vy = np.mean(ins._vy[-10:])
+                    X_curr = [ins._trajectory[-1][0]+vx*(curr_frame-ins._trajectory_frame_id[-1]), ins._trajectory[-1][1]+vy*(curr_frame-ins._trajectory_frame_id[-1])]
+                    # use_pred = True
+                    # if len(ins._observed_trajectory)>30:
+                    #     pred_id = -30
+                    # else:
+                    #     use_pred = False
+                    # if use_pred:
+                    #     vx = (ins._observed_trajectory[-1][0] - ins._observed_trajectory[pred_id][0])/(ins._observed_frame_id[-1]-ins._observed_frame_id[pred_id])
+                    #     vy = (ins._observed_trajectory[-1][1] - ins._observed_trajectory[pred_id][1])/(ins._observed_frame_id[-1]-ins._observed_frame_id[pred_id])
+                    
+                    # else:
+                        # X_curr = ins._trajectory[-1]
 
                     dis_matrix[i, j] = get_distance(X_curr, [pos_x, pos_y])
             
@@ -389,17 +411,25 @@ class MoT(object):
                     else:
                         ins = self.pre_instances[i-len(self.instances)]
 
-                    use_pred = True
-                    if len(ins._observed_trajectory)>30:
-                        pred_id = -30
-                    else:
-                        use_pred = False
-                    if use_pred:
-                        vx = (ins._observed_trajectory[-1][0] - ins._observed_trajectory[pred_id][0])/(ins._observed_frame_id[-1]-ins._observed_frame_id[pred_id])
-                        vy = (ins._observed_trajectory[-1][1] - ins._observed_trajectory[pred_id][1])/(ins._observed_frame_id[-1]-ins._observed_frame_id[pred_id])
-                        X_curr = [ins._trajectory[-1][0]+vx, ins._trajectory[-1][1]+vy]
-                    else:
-                        X_curr = ins._trajectory[-1]
+                    if len(ins._vx)<10:
+                        vx = np.mean(ins._vx)
+                        vy = np.mean(ins._vy)
+                    if len(ins._vx)>=10:
+                        vx = np.mean(ins._vx[-10:])
+                        vy = np.mean(ins._vy[-10:])
+                    X_curr = [ins._trajectory[-1][0]+vx*(curr_frame-ins._trajectory_frame_id[-1]), ins._trajectory[-1][1]+vy*(curr_frame-ins._trajectory_frame_id[-1])]
+
+                    # use_pred = True
+                    # if len(ins._observed_trajectory)>30:
+                    #     pred_id = -30
+                    # else:
+                    #     use_pred = False
+                    # if use_pred:
+                    #     vx = (ins._observed_trajectory[-1][0] - ins._observed_trajectory[pred_id][0])/(ins._observed_frame_id[-1]-ins._observed_frame_id[pred_id])
+                    #     vy = (ins._observed_trajectory[-1][1] - ins._observed_trajectory[pred_id][1])/(ins._observed_frame_id[-1]-ins._observed_frame_id[pred_id])
+                    #     X_curr = [ins._trajectory[-1][0]+vx, ins._trajectory[-1][1]+vy]
+                    # else:
+                    #     X_curr = ins._trajectory[-1]
                     
                     dis_matrix[i, j] = get_distance(X_curr, [pos_x, pos_y])
 
@@ -453,17 +483,24 @@ class MoT(object):
                     pos_y += np.sum(self.pys)
 
                     ins = self.instances[i]
-                    use_pred = True
-                    if len(ins._observed_trajectory)>30:
-                        pred_id = -30
-                    else:
-                        use_pred = False
-                    if use_pred:
-                        vx = (ins._observed_trajectory[-1][0] - ins._observed_trajectory[pred_id][0])/(ins._observed_frame_id[-1]-ins._observed_frame_id[pred_id])
-                        vy = (ins._observed_trajectory[-1][1] - ins._observed_trajectory[pred_id][1])/(ins._observed_frame_id[-1]-ins._observed_frame_id[pred_id])
-                        X_curr = [ins._trajectory[-1][0]+vx, ins._trajectory[-1][1]+vy]
-                    else:
-                        X_curr = ins._trajectory[-1]
+                    if len(ins._vx)<10:
+                        vx = np.mean(ins._vx)
+                        vy = np.mean(ins._vy)
+                    if len(ins._vx)>=10:
+                        vx = np.mean(ins._vx[-10:])
+                        vy = np.mean(ins._vy[-10:])
+                    X_curr = [ins._trajectory[-1][0]+vx*(curr_frame-ins._trajectory_frame_id[-1]), ins._trajectory[-1][1]+vy*(curr_frame-ins._trajectory_frame_id[-1])]
+                    # use_pred = True
+                    # if len(ins._observed_trajectory)>30:
+                    #     pred_id = -30
+                    # else:
+                    #     use_pred = False
+                    # if use_pred:
+                    #     vx = (ins._observed_trajectory[-1][0] - ins._observed_trajectory[pred_id][0])/(ins._observed_frame_id[-1]-ins._observed_frame_id[pred_id])
+                    #     vy = (ins._observed_trajectory[-1][1] - ins._observed_trajectory[pred_id][1])/(ins._observed_frame_id[-1]-ins._observed_frame_id[pred_id])
+                    #     X_curr = [ins._trajectory[-1][0]+vx, ins._trajectory[-1][1]+vy]
+                    # else:
+                    #     X_curr = ins._trajectory[-1]
 
                     dis_matrix[i, j] = get_distance(X_curr, [pos_x, pos_y])
             
@@ -513,7 +550,7 @@ class MoT(object):
                     # print(vx, vy)
                     X_curr = [ins._trajectory[-1][0]+vx*(curr_frame-ins._trajectory_frame_id[-1]), ins._trajectory[-1][1]+vy*(curr_frame-ins._trajectory_frame_id[-1])]
                     # if ins._k is not None:
-                    #     # print(X_curr)
+                    #     # print(X_curr)1
                 
                     #     y1 = ins._k*X_curr[0]+ins._b
                     #     x2 = (X_curr[1]-ins._b)/ins._k
